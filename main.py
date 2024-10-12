@@ -98,12 +98,14 @@ def get_total_pages(page):
     return 1
 
 
-def extract_football_matches(page):
+def extract_matches(page, sport="football"):
     """
-    Extrait les informations des matchs de football de la page actuelle et ignore les matchs avec des cotes à 0.
+    Extrait les informations des matchs de la page actuelle et ignore les matchs avec des cotes à 0.
+    La vérification de la cote de match nul est ignorée pour les sports comme le tennis.
 
     Args:
         page: Instance de la page Playwright.
+        sport (str): Le sport ("football" ou "tennis").
 
     Returns:
         list: Liste contenant les informations des matchs valides.
@@ -117,10 +119,10 @@ def extract_football_matches(page):
         # Extraire l'heure du match
         match_time = match_element.query_selector('div.event-time').inner_text().strip().replace("\n", " ")
 
-        # Extraire les noms des équipes
+        # Extraire les noms des équipes ou joueurs
         teams = match_element.query_selector_all('div.event-team')
 
-        # Vérifier que nous avons bien deux équipes dans le bloc
+        # Vérifier que nous avons bien deux équipes ou joueurs dans le bloc
         if len(teams) < 2:
             continue
 
@@ -131,20 +133,20 @@ def extract_football_matches(page):
         return_element = match_element.query_selector('div.event-return span')
         match_return = return_element.inner_text().strip()
 
-        # Extraire les cotes (victoire équipe 1, nul, victoire équipe 2)
+        # Extraire les cotes (victoire équipe 1, victoire équipe 2, et match nul pour les sports avec match nul)
         odds_elements = match_element.query_selector_all('strong[data-odd-target="odds"]')
         odd_1 = odds_elements[0].inner_text().strip()  # Cote pour la victoire de l'équipe 1
         odd_2 = odds_elements[1].inner_text().strip()  # Cote pour la victoire de l'équipe 2
 
-        # Vérifier si une cote pour le match nul est présente
+        # Vérifier si une cote pour le match nul est présente (uniquement pour le football)
         odd_draw = None
-        if len(odds_elements) > 2:
+        if sport == "football" and len(odds_elements) > 2:
             odd_draw = odds_elements[2].inner_text().strip()  # Cote pour le match nul
         else:
-            odd_draw = "0.00"  # Si pas de cote pour le match nul, on considère qu'elle est à 0
+            odd_draw = "N/A"  # Pas de cote pour le match nul dans les sports comme le tennis
 
-        # Vérifier que toutes les cotes ne sont pas égales à 0
-        if odd_1 == "0.00" or odd_2 == "0.00" or odd_draw == "0.00":
+        # Vérifier que les cotes ne sont pas égales à 0 (ignorer les matchs avec des cotes à 0)
+        if odd_1 == "0.00" or odd_2 == "0.00":
             continue  # Ignorer ce match et passer au suivant
 
         # Ajouter les informations du match à la liste
@@ -164,35 +166,39 @@ def extract_football_matches(page):
     return matches
 
 
-def paginate_and_extract_matches(page):
+
+def paginate_and_extract_matches(page, url, sport="football"):
     """
-    Parcourt les pages de la section "Cotes Foot" et extrait les informations des matchs.
+    Parcourt les pages de la section fournie dans l'URL et extrait les informations des matchs.
 
     Args:
         page: Instance de la page Playwright.
+        url: L'URL à scrapper (cotes foot ou cotes tennis).
+        sport: Le type de sport ("football" ou "tennis").
 
     Returns:
         list: Liste contenant toutes les informations des matchs de toutes les pages.
     """
     all_matches = []
 
-    # D'abord, trouver le nombre total de pages
-    page.goto("https://www.coteur.com/cotes-foot")
+    # Aller à la première page de la section donnée
+    page.goto(url)
     total_pages = get_total_pages(page)
 
     # Parcourir toutes les pages, de la page 1 à total_pages avec une barre de progression
-    for current_page in tqdm(range(1, total_pages + 1), desc="Chargement des pages de matchs"):
-        # Aller à la page des cotes de foot avec le numéro de page
-        page.goto(f"https://www.coteur.com/cotes-foot?page={current_page}")
+    for current_page in tqdm(range(1, total_pages + 1), desc=f"Chargement des pages de {url.split('/')[-1]}"):
+        # Aller à la page avec le numéro de page
+        page.goto(f"{url}?page={current_page}")
 
         # Attendre le chargement complet de la page
         page.wait_for_load_state('networkidle')
 
         # Extraire les informations des matchs sur la page actuelle
-        matches = extract_football_matches(page)
+        matches = extract_matches(page, sport)
         all_matches.extend(matches)
 
     return all_matches
+
 
 
 def sort_matches_by_return(matches):
@@ -205,7 +211,6 @@ def sort_matches_by_return(matches):
     Returns:
         list: La liste triée des matchs.
     """
-    # Convertir le taux de retour en flottant et trier par ce taux
     return sorted(matches, key=lambda match: float(match['return'].replace('%', '')), reverse=True)
 
 
@@ -222,22 +227,33 @@ def create_playwright_browser():
     return browser, page
 
 
-def display_match_info(matches):
+def save_match_info_to_file(matches, title):
     """
-    Affiche les informations des matchs dans la console.
+    Enregistre les informations des matchs dans un fichier texte dans le dossier 'results'.
 
     Args:
         matches (list): La liste contenant les informations des matchs.
+        title (str): Le titre pour identifier les matchs (foot ou tennis).
     """
-    for match in matches:
-        print(f"Match: {match['team_1']} vs {match['team_2']}")
-        print(f"Heure: {match['time']}")
-        print(f"Retour: {match['return']}")
-        print(f"Cote {match['team_1']}: {match['odds']['team_1']}")
-        if match['odds']['draw']:
-            print(f"Cote match nul: {match['odds']['draw']}")
-        print(f"Cote {match['team_2']}: {match['odds']['team_2']}")
-        print("-" * 30)
+    # Créer le dossier 'results' s'il n'existe pas
+    os.makedirs('results', exist_ok=True)
+
+    # Définir le chemin du fichier
+    file_path = f'results/{title.lower()}_matches.txt'
+
+    with open(file_path, 'w', encoding='utf-8') as f:
+        f.write(f"--- {title.upper()} ---\n")
+        for match in matches:
+            f.write(f"Match: {match['team_1']} vs {match['team_2']}\n")
+            f.write(f"Heure: {match['time']}\n")
+            f.write(f"Retour: {match['return']}\n")
+            f.write(f"Cote {match['team_1']}: {match['odds']['team_1']}\n")
+            if match['odds']['draw']:
+                f.write(f"Cote match nul: {match['odds']['draw']}\n")
+            f.write(f"Cote {match['team_2']}: {match['odds']['team_2']}\n")
+            f.write("-" * 30 + "\n")
+
+    log_message(f"Les informations des matchs de {title} ont été enregistrées dans '{file_path}'.")
 
 
 def main():
@@ -263,14 +279,19 @@ def main():
         # Se connecter à Coteur
         login_to_coteur(page, username, password)
 
-        # Parcourir les pages et extraire les informations des matchs
-        all_matches = paginate_and_extract_matches(page)
+        # Parcourir les pages et extraire les informations des matchs de football
+        foot_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-foot", sport="football")
+        sorted_foot_matches = sort_matches_by_return(foot_matches)
 
-        # Trier les matchs par taux de retour décroissant
-        sorted_matches = sort_matches_by_return(all_matches)
+        # Enregistrer les informations des matchs de football dans un fichier
+        save_match_info_to_file(sorted_foot_matches, "Foot")
 
-        # Afficher les informations des matchs
-        display_match_info(sorted_matches)
+        # Parcourir les pages et extraire les informations des matchs de tennis
+        tennis_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-tennis", sport="tennis")
+        sorted_tennis_matches = sort_matches_by_return(tennis_matches)
+
+        # Enregistrer les informations des matchs de tennis dans un fichier
+        save_match_info_to_file(sorted_tennis_matches, "Tennis")
 
     finally:
         # Fermer le navigateur
@@ -278,6 +299,7 @@ def main():
 
     # Enregistrer un message de fin dans le log
     log_message("Fin de l'exécution du script.")
+
 
 
 if __name__ == "__main__":
