@@ -143,7 +143,7 @@ def extract_matches(page, sport="football"):
         if sport == "football" and len(odds_elements) > 2:
             odd_draw = odds_elements[2].inner_text().strip()  # Cote pour le match nul
         else:
-            odd_draw = "N/A"  # Pas de cote pour le match nul dans les sports comme le tennis
+            odd_draw = ""  # Pas de cote pour le match nul dans les sports comme le tennis
 
         # Vérifier que les cotes ne sont pas égales à 0 (ignorer les matchs avec des cotes à 0)
         if odd_1 == "0.00" or odd_2 == "0.00":
@@ -186,7 +186,7 @@ def paginate_and_extract_matches(page, url, sport="football"):
     total_pages = get_total_pages(page)
 
     # Parcourir toutes les pages, de la page 1 à total_pages avec une barre de progression
-    for current_page in tqdm(range(1, total_pages + 1), desc=f"Chargement des pages de {url.split('/')[-1]}"):
+    for current_page in tqdm(range(1, total_pages + 1), desc=f"Chargement des matchs de {sport}"):
         # Aller à la page avec le numéro de page
         page.goto(f"{url}?page={current_page}")
 
