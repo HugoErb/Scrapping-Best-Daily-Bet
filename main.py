@@ -133,17 +133,19 @@ def extract_matches(page, sport="football"):
         return_element = match_element.query_selector('div.event-return span')
         match_return = return_element.inner_text().strip()
 
-        # Extraire les cotes (victoire équipe 1, victoire équipe 2, et match nul pour les sports avec match nul)
+        # Extraire les cotes (victoire équipe 1, match nul, et victoire équipe 2)
         odds_elements = match_element.query_selector_all('strong[data-odd-target="odds"]')
-        odd_1 = odds_elements[0].inner_text().strip()  # Cote pour la victoire de l'équipe 1
-        odd_2 = odds_elements[1].inner_text().strip()  # Cote pour la victoire de l'équipe 2
 
-        # Vérifier si une cote pour le match nul est présente (uniquement pour le football)
+        # Ajustement pour les cotes : 1ère équipe, match nul, 2ème équipe
+        odd_1 = odds_elements[0].inner_text().strip()  # Cote pour la victoire de l'équipe 1
         odd_draw = None
-        if sport == "football" and len(odds_elements) > 2:
-            odd_draw = odds_elements[2].inner_text().strip()  # Cote pour le match nul
+        odd_2 = None
+
+        if sport == "football" and len(odds_elements) == 3:
+            odd_draw = odds_elements[1].inner_text().strip()  # Cote pour le match nul
+            odd_2 = odds_elements[2].inner_text().strip()  # Cote pour la victoire de l'équipe 2
         else:
-            odd_draw = ""  # Pas de cote pour le match nul dans les sports comme le tennis
+            odd_2 = odds_elements[1].inner_text().strip()  # Pas de cote de match nul dans le tennis
 
         # Vérifier que les cotes ne sont pas égales à 0 (ignorer les matchs avec des cotes à 0)
         if odd_1 == "0.00" or odd_2 == "0.00":
@@ -158,13 +160,12 @@ def extract_matches(page, sport="football"):
             "odds": {
                 "team_1": odd_1,
                 "team_2": odd_2,
-                "draw": odd_draw
+                "draw": odd_draw if odd_draw else ""
             }
         }
         matches.append(match_info)
 
     return matches
-
 
 
 def paginate_and_extract_matches(page, url, sport="football"):
@@ -198,7 +199,6 @@ def paginate_and_extract_matches(page, url, sport="football"):
         all_matches.extend(matches)
 
     return all_matches
-
 
 
 def sort_matches_by_return(matches):
