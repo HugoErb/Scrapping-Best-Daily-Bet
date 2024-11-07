@@ -1,5 +1,7 @@
 # Ignorer le répertoire du virtualenv
 venv/
 
+results/
+
 # Ignorer le fichier .env contenant les identifiants
 .env
