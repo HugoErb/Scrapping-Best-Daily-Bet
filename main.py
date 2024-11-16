@@ -1,12 +1,14 @@
 import logging
 import os
+import datetime
 from playwright.sync_api import sync_playwright
-from tqdm import tqdm  # Pour la barre de progression
+from tqdm import tqdm
+from constants import BOOKMAKERS
 
-# Configuration de base pour le logger
+
 def setup_logger():
     """
-    Configure le logger de base pour l'application.
+    Configure le logger pour l'application.
     """
     logging.basicConfig(
         level=logging.INFO,
@@ -68,6 +70,69 @@ def login_to_coteur(page, username, password):
 
     # Attendre que la page de membre soit complètement chargée
     page.wait_for_load_state('networkidle')
+
+
+def ask_user_for_bookmaker():
+    """
+    Demande à l'utilisateur quel bookmaker choisir.
+    """
+    print("Liste des bookmakers disponibles :")
+    for i, bookmaker in enumerate(BOOKMAKERS, 1):
+        print(f"{i}. {bookmaker['name']}")
+    print(f"{len(BOOKMAKERS) + 1}. Tous les bookmakers")
+
+    choice = int(input("\nEntrez le numéro du bookmaker à récupérer : "))
+
+    if choice == len(BOOKMAKERS) + 1:
+        return [b['id'] for b in BOOKMAKERS]
+    elif 1 <= choice <= len(BOOKMAKERS):
+        return [BOOKMAKERS[choice - 1]['id']]
+    else:
+        print("Choix invalide. Réessayez.")
+        return ask_user_for_bookmaker()
+
+
+def select_bookmakers(page, selected_bookmakers):
+    """
+    Sélectionne les bookmakers sur la page des paramètres et valide.
+    """
+    log_message("Navigation vers la page des sélections des bookmakers.")
+    page.goto("https://www.coteur.com/bookmaker/selection")
+
+    # Vérifiez que vous êtes bien sur la page attendue
+    if "selection" not in page.url:
+        log_message("Erreur : Vous n'êtes pas connecté. Impossible d'accéder à la page des sélections.")
+        return
+
+    log_message("Attente de la page.")
+    page.wait_for_selector('form[action="?action=update"]')  # Attendre que le formulaire soit visible
+
+    # Sélectionner uniquement les checkboxes dans la balise <form>
+    checkboxes = page.query_selector_all('form[action="?action=update"] input.form-check-input[type="checkbox"]')
+
+    # Décochez toutes les checkboxes trouvées
+    for checkbox in checkboxes:
+        if checkbox.is_checked():
+            checkbox.click()
+
+    # Cochez uniquement les bookmakers sélectionnés
+    for bookmaker_id in selected_bookmakers:
+        checkbox_selector = f'form[action="?action=update"] input.form-check-input[value="{bookmaker_id}"]'
+        checkbox = page.query_selector(checkbox_selector)
+
+        if checkbox:
+            try:
+                checkbox.scroll_into_view_if_needed()
+                checkbox.click()
+            except Exception as e:
+                log_message(f"Erreur lors de la sélection du bookmaker ID {bookmaker_id} : {str(e)}")
+        else:
+            log_message(f"Checkbox introuvable pour le bookmaker ID {bookmaker_id}.")
+
+    # Soumettez le formulaire
+    page.click('form[action="?action=update"] button[type="submit"]')
+    page.wait_for_load_state('networkidle')
+    log_message("Validation du changement de bookmaker soumis avec succès.")
 
 
 def get_total_pages(page):
@@ -213,7 +278,6 @@ def sort_matches_by_return(matches):
     """
     return sorted(matches, key=lambda match: float(match['return'].replace('%', '')), reverse=True)
 
-
 def create_playwright_browser():
     """
     Crée et lance une instance de navigateur Playwright en mode headless (sans interface graphique).
@@ -227,22 +291,24 @@ def create_playwright_browser():
     return browser, page
 
 
-def save_match_info_to_file(matches, title):
+def save_match_info_to_file(matches, title, bookmaker_name):
     """
     Enregistre les informations des matchs dans un fichier texte dans le dossier 'results'.
 
     Args:
         matches (list): La liste contenant les informations des matchs.
         title (str): Le titre pour identifier les matchs (foot ou tennis).
+        bookmaker_name (str): Le nom du bookmaker pour identifier la provenance des matchs.
     """
     # Créer le dossier 'results' s'il n'existe pas
     os.makedirs('results', exist_ok=True)
 
     # Définir le chemin du fichier
-    file_path = f'results/{title.lower()}_matches.txt'
+    date_str = datetime.datetime.now().strftime("%d-%m-%Y")
+    file_path = f"results/{title.lower()}_{bookmaker_name.lower()}_{date_str}.txt"
 
     with open(file_path, 'w', encoding='utf-8') as f:
-        f.write(f"--- {title.upper()} ---\n")
+        f.write(f"--- {title.upper()} - {bookmaker_name.upper()} ---\n")
         for match in matches:
             f.write(f"Match: {match['team_1']} vs {match['team_2']}\n")
             f.write(f"Heure: {match['time']}\n")
@@ -253,53 +319,63 @@ def save_match_info_to_file(matches, title):
             f.write(f"Cote {match['team_2']}: {match['odds']['team_2']}\n")
             f.write("-" * 30 + "\n")
 
-    log_message(f"Les informations des matchs de {title} ont été enregistrées dans '{file_path}'.")
+    log_message(
+        f"Les informations des matchs de {title} ({bookmaker_name}) ont été enregistrées dans '{file_path}'.")
+
 
 
 def main():
-    # Configurer le logger
     setup_logger()
 
-    # Charger les variables d'environnement à partir du fichier .env
+    # Charger les variables d'environnement
     env_vars = load_env_variables()
-
-    # Récupérer les identifiants
     username = env_vars.get('USERNAME')
     password = env_vars.get('PASSWORD')
 
-    # Vérifier que les identifiants sont bien chargés
     if not username or not password:
-        log_message("Les identifiants ne sont pas définis dans le fichier .env.")
+        log_message("Identifiants non définis dans .env.")
         return
 
-    # Créer une instance de Playwright et se connecter
+    # Créer une instance de Playwright
     browser, page = create_playwright_browser()
 
     try:
-        # Se connecter à Coteur
+        # Étape 1 : Connexion au site
+        log_message("Connexion au compte...")
         login_to_coteur(page, username, password)
 
-        # Parcourir les pages et extraire les informations des matchs de football
-        foot_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-foot", sport="football")
-        sorted_foot_matches = sort_matches_by_return(foot_matches)
+        # Vérifier si la connexion a réussi
+        if "login" in page.url:
+            log_message("Erreur : Connexion échouée. Veuillez vérifier vos identifiants.")
+            return
+        log_message("Connexion réussie.")
 
-        # Enregistrer les informations des matchs de football dans un fichier
-        save_match_info_to_file(sorted_foot_matches, "Foot")
+        # Étape 2 : Demander le bookmaker à scrapper
+        selected_bookmakers = ask_user_for_bookmaker()
 
-        # Parcourir les pages et extraire les informations des matchs de tennis
-        tennis_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-tennis", sport="tennis")
-        sorted_tennis_matches = sort_matches_by_return(tennis_matches)
+        # Étape 3 : Sélectionner les bookmakers sur la page dédiée
+        select_bookmakers(page, selected_bookmakers)
 
-        # Enregistrer les informations des matchs de tennis dans un fichier
-        save_match_info_to_file(sorted_tennis_matches, "Tennis")
+        # Étape 4 : Scrapper les données des bookmakers sélectionnés
+        for bookmaker_id in selected_bookmakers:
+            bookmaker_name = next(b['name'] for b in BOOKMAKERS if b['id'] == bookmaker_id)
+
+            # Scrapper les matchs de football
+            log_message(f"Scrapping des matchs de football pour {bookmaker_name}.")
+            foot_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-foot", sport="football")
+            sorted_foot_matches = sort_matches_by_return(foot_matches)
+            save_match_info_to_file(sorted_foot_matches, "Foot", bookmaker_name)
+
+            # Scrapper les matchs de tennis
+            log_message(f"Scrapping des matchs de tennis pour {bookmaker_name}.")
+            tennis_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-tennis", sport="tennis")
+            sorted_tennis_matches = sort_matches_by_return(tennis_matches)
+            save_match_info_to_file(sorted_tennis_matches, "Tennis", bookmaker_name)
 
     finally:
-        # Fermer le navigateur
         browser.close()
 
-    # Enregistrer un message de fin dans le log
     log_message("Fin de l'exécution du script.")
-
 
 
 if __name__ == "__main__":
