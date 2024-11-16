@@ -4,14 +4,8 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="9cf51eb7-30b8-490e-b45e-9c0e16c20b5b" name="Changes" comment="">
-      <change afterPath="$PROJECT_DIR$/.idea/Scrapping Best Bet.iml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/constants.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/Scrapping Best Daily Bet.iml" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/modules.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/modules.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
+    <list default="true" id="9cf51eb7-30b8-490e-b45e-9c0e16c20b5b" name="Changes" comment="Ajout de la fonctionnalité de pouvoir choisir le bookmaker à scrapper">
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
@@ -67,6 +61,19 @@
       <option name="presentableId" value="Default" />
       <updated>1731765972061</updated>
     </task>
+    <task id="LOCAL-00001" summary="Ajout de la fonctionnalité de pouvoir choisir le bookmaker à scrapper">
+      <option name="closed" value="true" />
+      <created>1731769410248</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1731769410248</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Ajout de la fonctionnalité de pouvoir choisir le bookmaker à scrapper" />
+    <option name="LAST_COMMIT_MESSAGE" value="Ajout de la fonctionnalité de pouvoir choisir le bookmaker à scrapper" />
   </component>
 </project>

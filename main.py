@@ -353,12 +353,38 @@ def main():
         # Étape 2 : Demander le bookmaker à scrapper
         selected_bookmakers = ask_user_for_bookmaker()
 
-        # Étape 3 : Sélectionner les bookmakers sur la page dédiée
-        select_bookmakers(page, selected_bookmakers)
+        # Étape 3 : Gérer "Tous" les bookmakers
+        if len(selected_bookmakers) > 1:  # Cas où "Tous" est sélectionné
+            for bookmaker_id in selected_bookmakers:
+                bookmaker_name = next(b['name'] for b in BOOKMAKERS if b['id'] == bookmaker_id)
 
-        # Étape 4 : Scrapper les données des bookmakers sélectionnés
-        for bookmaker_id in selected_bookmakers:
+                # Sélectionner uniquement le bookmaker actuel
+                log_message(f"Sélection unique du bookmaker {bookmaker_name}.")
+                select_bookmakers(page, [bookmaker_id])
+
+                # Scrapper les matchs de football
+                log_message(f"Scrapping des matchs de football pour {bookmaker_name}.")
+                foot_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-foot", sport="football")
+                sorted_foot_matches = sort_matches_by_return(foot_matches)
+                save_match_info_to_file(sorted_foot_matches, "Foot", bookmaker_name)
+
+                # Scrapper les matchs de tennis
+                log_message(f"Scrapping des matchs de tennis pour {bookmaker_name}.")
+                tennis_matches = paginate_and_extract_matches(page, "https://www.coteur.com/cotes-tennis", sport="tennis")
+                sorted_tennis_matches = sort_matches_by_return(tennis_matches)
+                save_match_info_to_file(sorted_tennis_matches, "Tennis", bookmaker_name)
+
+                # Décocher le bookmaker actuel avant de passer au suivant
+                log_message(f"Désélection du bookmaker {bookmaker_name}.")
+                select_bookmakers(page, [])  # Désélectionner tous les bookmakers
+
+        else:  # Cas où un seul bookmaker est sélectionné
+            bookmaker_id = selected_bookmakers[0]
             bookmaker_name = next(b['name'] for b in BOOKMAKERS if b['id'] == bookmaker_id)
+
+            # Sélectionner le bookmaker
+            log_message(f"Sélection du bookmaker {bookmaker_name}.")
+            select_bookmakers(page, [bookmaker_id])
 
             # Scrapper les matchs de football
             log_message(f"Scrapping des matchs de football pour {bookmaker_name}.")
